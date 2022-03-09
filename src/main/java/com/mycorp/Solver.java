@@ -1,8 +1,11 @@
 package com.mycorp;
 
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Scanner;
 import java.util.Stack;
+import java.util.Locale;
 
 public class Solver {
 
@@ -21,11 +24,18 @@ public class Solver {
     {
         String number="";
         boolean isEndOfNumberExist=false;
+        boolean isCommaExist=false;
         while (!isEndOfNumberExist && index.value<expression.length())
         {
             char symbol = expression.charAt(index.value);
             if (Character.isDigit(symbol))
             {
+                number+=symbol;
+                index.value++;
+            }
+            else if (symbol=='.'&& !isCommaExist)
+            {
+                isCommaExist=true;
                 number+=symbol;
                 index.value++;
             }
@@ -36,6 +46,41 @@ public class Solver {
             }
         }
         return number;
+    }
+
+    private static String getAllParameter(String expression, WrapInt index)
+    {
+        String parameter="";
+        boolean isEndOfParameterExist=false;
+        while (!isEndOfParameterExist && index.value<expression.length())
+        {
+            char symbol = expression.charAt(index.value);
+            if (Character.isAlphabetic(symbol))
+            {
+                parameter+=symbol;
+                index.value++;
+            }
+            else
+            {
+                isEndOfParameterExist=true;
+                index.value--;
+            }
+        }
+        return parameter;
+    }
+
+    private static String enterValueOfParameter(String nameOfParameter)
+    {
+        String valueOfParameter="";
+        System.out.println("Please, enter value of parameter " + nameOfParameter);
+        Scanner console = new Scanner(System.in).useLocale(Locale.US);
+        while (!console.hasNextDouble())
+        {
+            System.out.println("Value of parameter must be a number, try again ( double with comma)");
+            console.nextLine();
+        }
+        valueOfParameter=console.nextLine();
+        return valueOfParameter;
     }
 
 
@@ -50,6 +95,7 @@ public class Solver {
     {
         String postfixExpression = "";
         Stack<Character> stack = new Stack<>();
+        ArrayList<String> parameters = new ArrayList<>();
 
         WrapInt index = new WrapInt();
         while (index.value<infixForm.length())
@@ -80,12 +126,25 @@ public class Solver {
                 }
                 stack.push(symbol);
             }
+            else if (Character.isAlphabetic(symbol))
+            {
+                String parameter = getAllParameter(infixForm,index);
+                postfixExpression+=parameter+" ";
+                if (!parameters.contains(parameter)) parameters.add(parameter);
+            }
             index.value++;
         }
-        for (char operator : stack)
-        {
-            postfixExpression+=operator;
 
+        while (!stack.isEmpty())
+        {
+            postfixExpression+=stack.pop();
+        }
+
+
+        for (String parameter : parameters)
+        {
+            String valueOfParameter = enterValueOfParameter(parameter);
+            postfixExpression = postfixExpression.replace(parameter,valueOfParameter);
         }
 
         return postfixExpression;
