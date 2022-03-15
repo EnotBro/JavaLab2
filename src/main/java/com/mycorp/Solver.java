@@ -1,26 +1,40 @@
 package com.mycorp;
 
 
+import com.mycorp.elements.ElementOfExpression;
+import com.mycorp.elements.operator.Bracket;
+import com.mycorp.elements.operator.Operator;
+import com.mycorp.elements.operator.binary.BinaryOperationFactory;
+import com.mycorp.elements.operator.binary.BinaryOperation;
+import com.mycorp.elements.operator.unary.UnaryOperation;
+import com.mycorp.elements.operator.unary.UnaryOperationFactory;
+import com.mycorp.elements.valuable.Parameter;
+import com.mycorp.elements.valuable.Number;
+import com.mycorp.elements.valuable.Valuable;
+
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Scanner;
 import java.util.Stack;
 import java.util.Locale;
+import java.util.List;
 
 public class Solver {
 
-    private static final HashMap<Character,Integer> operationPriority = new HashMap<>();
+    private static final List<String> availableOperators = new ArrayList<>();
     static
     {
-        operationPriority.put('(',0);
-        operationPriority.put('+',1);
-        operationPriority.put('-',1);
-        operationPriority.put('*',2);
-        operationPriority.put('/',2);
-        operationPriority.put('^',3);
+        availableOperators.add("(");
+        availableOperators.add("+");
+        availableOperators.add("-");
+        availableOperators.add("*");
+        availableOperators.add("/");
+        availableOperators.add("^");
+        availableOperators.add("sin");
+        availableOperators.add("cos");
     }
 
-    private static String getAllNumber(String expression, WrapInt index)
+
+    private static Double getAllNumber(String expression, WrapInt index)
     {
         String number="";
         boolean isEndOfNumberExist=false;
@@ -45,7 +59,7 @@ public class Solver {
                 index.value--;
             }
         }
-        return number;
+        return Double.parseDouble(number);
     }
 
     private static String getAllParameter(String expression, WrapInt index)
@@ -66,36 +80,58 @@ public class Solver {
                 index.value--;
             }
         }
-        return parameter;
+        return parameter.toLowerCase(Locale.ROOT);
     }
 
-    private static String enterValueOfParameter(String nameOfParameter)
+    private static Double enterValueOfParameter(String nameOfParameter)
     {
         String valueOfParameter="";
         System.out.println("Please, enter value of parameter " + nameOfParameter);
         Scanner console = new Scanner(System.in).useLocale(Locale.US);
         while (!console.hasNextDouble())
         {
-            System.out.println("Value of parameter must be a number, try again ( double with comma)");
+            System.out.println("Value of parameter must be a number, try again ( double with dot)");
             console.nextLine();
         }
         valueOfParameter=console.nextLine();
-        return valueOfParameter;
+        return Double.parseDouble(valueOfParameter);
     }
 
 
 
     public static double getSolution(String expression)
     {
-        String postfixForm = refactorToPostfixForm(expression);
+        ArrayList<ElementOfExpression> postfixForm = refactorToPostfixForm(expression);
         return getSolutionOfPostfixForm(postfixForm);
     }
 
-    private static String refactorToPostfixForm(String infixForm)
+    private static Parameter getParameterFromListByName(ArrayList<Parameter> parameters, String name)
     {
-        String postfixExpression = "";
-        Stack<Character> stack = new Stack<>();
-        ArrayList<String> parameters = new ArrayList<>();
+        Parameter result=null;
+        int index=0;
+        while(index<parameters.size()&& result==null)
+        {
+            Parameter tmp = parameters.get(index);
+            if(tmp.getName()==name)result=tmp;
+        }
+        return result;
+    }
+
+    private static void putNewOperatorToStack(ArrayList<ElementOfExpression> postfixExpression, Stack<Operator> stack, Operator newOperator)
+    {
+        while (stack.size()>0 && stack.peek().getPriority()>=newOperator.getPriority())
+        {
+            postfixExpression.add(stack.pop());
+        }
+        stack.push(newOperator);
+    }
+
+    private static ArrayList<ElementOfExpression> refactorToPostfixForm(String infixForm)
+    {
+        final ArrayList<ElementOfExpression> postfixExpression = new ArrayList<>();
+
+        Stack<Operator> stack = new Stack<>();
+        ArrayList<Parameter> parameters = new ArrayList<>();
 
         WrapInt index = new WrapInt();
         while (index.value<infixForm.length())
@@ -104,109 +140,99 @@ public class Solver {
 
             if (Character.isDigit(symbol))
             {
-                postfixExpression+=getAllNumber(infixForm,index)+" ";
+                postfixExpression.add(new Number(getAllNumber(infixForm,index)));
             }
             else if (symbol=='(')
             {
-                stack.push('(');
+                stack.push(new Bracket());
             }
             else if (symbol==')')
             {
-                while (stack.size()>0&&stack.peek()!='(')
+                while (stack.size()>0&&stack.peek().getClass()!=Bracket.class)
                 {
-                    postfixExpression+=stack.pop();
+                    postfixExpression.add(stack.pop());
                 }
                 stack.pop();
             }
-            else if (operationPriority.containsKey(symbol))
+            else if (availableOperators.contains(String.valueOf(symbol)))
             {
-                while (stack.size()>0 && operationPriority.get(stack.peek())>=operationPriority.get(symbol))
+                Operator operator = null;
+                if (symbol=='-'&& (index.value == 0 || (index.value > 1 &&
+                        availableOperators.contains( String.valueOf(infixForm.charAt(index.value-1))))))
+                    operator= UnaryOperationFactory.createUnaryOperation("-");
+                else
                 {
-                    postfixExpression+=stack.pop();
+                    operator= BinaryOperationFactory.createBinaryOperation(String.valueOf(symbol));
                 }
-                stack.push(symbol);
+
+                putNewOperatorToStack(postfixExpression,stack,operator);
             }
             else if (Character.isAlphabetic(symbol))
             {
-                String parameter = getAllParameter(infixForm,index);
-                postfixExpression+=parameter+" ";
-                if (!parameters.contains(parameter)) parameters.add(parameter);
+                String element = getAllParameter(infixForm,index);
+                if (availableOperators.contains(element))
+                {
+                    Operator operator = UnaryOperationFactory.createUnaryOperation(element);
+                    putNewOperatorToStack(postfixExpression,stack,operator);
+                }
+                else
+                {
+                    Parameter parameter = getParameterFromListByName(parameters,element);
+                    if(parameter==null)
+                    {
+                        Parameter newParameter = new Parameter(element);
+                        postfixExpression.add(newParameter);
+                        parameters.add(newParameter);
+                    }
+                    else postfixExpression.add(parameter);
+                }
             }
             index.value++;
         }
 
         while (!stack.isEmpty())
         {
-            postfixExpression+=stack.pop();
+            postfixExpression.add(stack.pop());
         }
 
-
-        for (String parameter : parameters)
+        for (Parameter parameter : parameters)
         {
-            String valueOfParameter = enterValueOfParameter(parameter);
-            postfixExpression = postfixExpression.replace(parameter,valueOfParameter);
+            double valueOfParameter = enterValueOfParameter(parameter.getName());
+            parameter.setValue(valueOfParameter);
         }
 
-        return postfixExpression;
+        return  postfixExpression;
     }
 
-    private static double getSolutionOfPostfixForm(String postfixForm)
+    private static double getSolutionOfPostfixForm(ArrayList<ElementOfExpression> postfixForm)
     {
         Stack<Double> localValue = new Stack<>();
         WrapInt index = new WrapInt();
 
-        while(index.value<postfixForm.length())
+        while(index.value<postfixForm.size())
         {
-            char symbol = postfixForm.charAt(index.value);
+            ElementOfExpression element = postfixForm.get(index.value);
 
-            if (Character.isDigit(symbol))
+            if (element.getClass()==Number.class||element.getClass()==Parameter.class)
             {
-                String number = getAllNumber(postfixForm, index);
-                localValue.push(Double.parseDouble(number));
+                localValue.push(((Valuable) element).getValue());
             }
-            else if (operationPriority.containsKey(symbol))
+            else
             {
-                double second = (localValue.size()>0) ? localValue.pop() : 0;
-                double first = (localValue.size()>0) ? localValue.pop() : 0;
-
-                localValue.push(calculate(symbol,first,second));
+                if (element instanceof UnaryOperation)
+                {
+                    double last = (localValue.size()>0) ? localValue.pop() : 0;
+                    localValue.push(((UnaryOperation) element).calculate(last));
+                }
+                else {
+                    double second = (localValue.size() > 0) ? localValue.pop() : 0;
+                    double first = (localValue.size() > 0) ? localValue.pop() : 0;
+                    localValue.push(((BinaryOperation) element).calculate(first,second));
+                }
             }
             index.value++;
         }
         return localValue.pop();
     }
-
-    private static double calculate(char operator, double first, double second)
-    {
-        double result=0.0;
-        switch (operator)
-        {
-            case '+':
-            {
-                result=first+second;
-               break;
-            }
-            case '-':
-            {
-                result=first-second;
-                break;
-            }
-            case '*':
-            {
-                result=first*second;
-                break;
-            }
-            case '/':
-            {
-                result=first/second;
-                break;
-            }
-            case '^':
-            {
-                result=Math.pow(first,second);
-                break;
-            }
-        }
-        return result;
-    }
 }
+
